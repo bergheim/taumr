@@ -19,7 +19,9 @@ type SessionEntry = {
     message?: SessionMessage;
 };
 
-export function buildConversationContext(entries: readonly SessionEntry[]): string {
+export function buildConversationContext(
+    entries: readonly SessionEntry[],
+): string {
     const sections: string[] = [];
     for (const entry of entries) {
         if (entry.type !== "message" || !entry.message?.role) continue;
@@ -32,7 +34,10 @@ export function buildConversationContext(entries: readonly SessionEntry[]): stri
     return truncateFromStart(sections.join("\n\n"), MAX_CONTEXT_CHARS);
 }
 
-export function buildSideMessages(question: string, conversationContext: string) {
+export function buildSideMessages(
+    question: string,
+    conversationContext: string,
+) {
     return [
         {
             role: "user" as const,
@@ -47,7 +52,8 @@ export function buildSideMessages(question: string, conversationContext: string)
                         "</side_question>",
                         "",
                         "<conversation_context>",
-                        conversationContext || "No prior conversation context was available.",
+                        conversationContext ||
+                            "No prior conversation context was available.",
                         "</conversation_context>",
                     ].join("\n"),
                 },

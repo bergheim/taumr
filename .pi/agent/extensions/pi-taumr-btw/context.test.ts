@@ -36,13 +36,20 @@ test("buildConversationContext keeps user/assistant text only", () => {
                 role: "assistant",
                 content: [
                     { type: "text", text: "ok" },
-                    { type: "toolCall", name: "edit", arguments: { path: "x" } },
+                    {
+                        type: "toolCall",
+                        name: "edit",
+                        arguments: { path: "x" },
+                    },
                 ],
             },
         },
         {
             type: "message",
-            message: { role: "toolResult", content: [{ type: "text", text: "huge" }] },
+            message: {
+                role: "toolResult",
+                content: [{ type: "text", text: "huge" }],
+            },
         },
     ]);
     assert.equal(snapshot, "User: fix the footer\n\nAssistant: ok");
