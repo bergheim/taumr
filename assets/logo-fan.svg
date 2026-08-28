@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200" viewBox="0 0 600 200" role="img" aria-labelledby="t d">
+  <title id="t">Taumr</title>
+  <desc id="d">Three reins flaring from one hand.</desc>
+  <g fill="none" stroke="#d97706" stroke-width="26" stroke-linecap="round">
+    <path d="M60 168C60 110 40 72 20 50"/>
+    <path d="M100 170V30"/>
+    <path d="M140 168C140 110 160 72 180 50"/>
+  </g>
+  <text x="222" y="131" fill="#d97706" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="84" font-weight="700" letter-spacing="12">TAUMR</text>
+</svg>

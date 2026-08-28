@@ -120,3 +120,17 @@ CLOSED: [2026-08-28 Fri 12:54]
 - Session unknown [2026-08-28 Fri 12:54]
 :END:
 Copy ~/.pi/agent/extensions/usage into .pi/agent/extensions/pi-taumr-statusbar with behavior preserved.
+
+* DONE Explore replacement taumr logos                      :design:branding:
+CLOSED: [2026-08-28 Fri 17:01]
+:PROPERTIES:
+:ID:       20260828T165533Z-0c83c6
+:CREATED:  [2026-08-28 Fri 16:55]
+:LAST_AGENT: unknown
+:END:
+:LOGBOOK:
+- Note taken on [2026-08-28 Fri 17:01] \\
+  Six transparent logo concepts saved under assets/logo-concepts; existing logo preserved.
+- Session unknown [2026-08-28 Fri 17:01]
+:END:
+Create six transparent logo concepts: three image-generator explorations and three independent Claude SVG concepts. Preserve the existing mark until selection.

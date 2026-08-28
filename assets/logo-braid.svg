@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200" viewBox="0 0 600 200" role="img" aria-labelledby="t d">
+  <title id="t">Taumr</title>
+  <desc id="d">Many lanes braided into one lead.</desc>
+  <g fill="none" stroke="#d97706" stroke-width="22" stroke-linecap="round">
+    <path d="M26 50c66 0 78 48 126 50"/>
+    <path d="M26 100h126"/>
+    <path d="M26 150c66 0 78-48 126-50"/>
+    <path d="M152 100h26"/>
+  </g>
+  <text x="222" y="131" fill="#d97706" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="84" font-weight="700" letter-spacing="12">TAUMR</text>
+</svg>
