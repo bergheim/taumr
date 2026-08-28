@@ -4,7 +4,7 @@
 
 Old Norse *taumr*: the rein. A shared harness and workflow for agentic coding.
 
-This repo is a kit. Clone it somewhere like `~/dev/taumr`. Do not make it `~/.pi` or `~/.herdr`.
+This repo is a kit. Clone it somewhere like `~/dev/taumr`. Do not make it `~/.pi` or `~/.herdr`. Config files are not included; how you customize `~/.tmux.conf` and friends is up to you.
 
 | here | on the machine |
 | --- | --- |
