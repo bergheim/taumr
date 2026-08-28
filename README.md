@@ -6,7 +6,7 @@ This repo is a kit. Clone it somewhere like `~/dev/taumr`. Do not make it `~/.pi
 
 | here | on the machine |
 | --- | --- |
-| `.pi/` | symlink or copy into `~/.pi/agent` |
+| `.pi/agent/` | symlink or copy into `~/.pi/agent` |
 | `herdr/` | merge fragments into `~/.config/herdr` |
 | `skills/` | add the path in Pi settings, or symlink into `~/.agents/skills` |
 
