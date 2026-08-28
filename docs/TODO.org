@@ -134,3 +134,17 @@ CLOSED: [2026-08-28 Fri 17:01]
 - Session unknown [2026-08-28 Fri 17:01]
 :END:
 Create six transparent logo concepts: three image-generator explorations and three independent Claude SVG concepts. Preserve the existing mark until selection.
+
+* DONE Riff fray-ragged logo concepts                       :design:branding:
+CLOSED: [2026-08-28 Fri 18:17]
+:PROPERTIES:
+:ID:       20260828T181720Z-a1ae75
+:CREATED:  [2026-08-28 Fri 18:17]
+:LAST_AGENT: unknown
+:END:
+:LOGBOOK:
+- Note taken on [2026-08-28 Fri 18:17] \\
+  Six transparent riffs saved under assets/logo-concepts; README uses logo-fray-ragged.svg.
+- Session unknown [2026-08-28 Fri 18:17]
+:END:
+Create six new transparent logo riffs based directly on assets/logo-fray-ragged.svg and keep README pointed at that asset.
