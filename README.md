@@ -1,6 +1,6 @@
 # taumr
 
-<p align="center"><img src="assets/logo-u-ragged.svg" width="180" alt="Taumr logo: a frayed U resolving into one rein"></p>
+<p align="center"><img src="assets/logo-fray-ragged.svg" width="180" alt="Taumr logo: a frayed U resolving into one rein"></p>
 
 Old Norse *taumr*: the rein. A shared harness and workflow for agentic coding.
 
