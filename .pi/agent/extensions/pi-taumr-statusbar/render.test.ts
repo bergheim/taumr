@@ -46,7 +46,7 @@ const sample: CurrentSession = {
     provider: "xai",
     modelId: "grok-4.6",
     thinking: "medium",
-    dir: "jolo",
+    dir: "taumr",
     branch: "master",
     dirty: true,
     percent: 42,
@@ -246,7 +246,7 @@ test("current line is model metadata only", () => {
     assert.equal(plains[1], "󰔛 medium");
     assert.equal(segs[1].tone, "accent");
     assert.ok(plains.includes("󰔚 $1.23"));
-    assert.ok(!plains.some((p) => p.includes("jolo") || p.includes("master")));
+    assert.ok(!plains.some((p) => p.includes("taumr") || p.includes("master")));
     assert.ok(!plains.some((p) => p.includes("ctx") || p.includes("cache")));
 });
 
@@ -261,7 +261,7 @@ test("omits thinking when absent", () => {
 
 test("location line is worktree and branch", () => {
     const plains = locationLineSegments(sample).map((s) => s.plain);
-    assert.deepEqual(plains, [" jolo", " master ●", "󰍛 ctx 42% 120k/500k"]);
+    assert.deepEqual(plains, [" taumr", " master ●", "󰍛 ctx 42% 120k/500k"]);
 });
 
 test("location line uses the active model context window", () => {
@@ -288,7 +288,7 @@ test("location line puts cache after ctx", () => {
         cacheTtlSeconds: 300,
     }).map((s) => s.plain);
     assert.deepEqual(plains, [
-        " jolo",
+        " taumr",
         " master ●",
         "󰍛 ctx 42% 120k/500k",
         "󰒍 cache 4m 32s",
@@ -302,7 +302,7 @@ test("location line adds cwd when it differs", () => {
     }).map((s) => s.plain);
     assert.deepEqual(plains, [
         " .pi",
-        " jolo",
+        " taumr",
         " master ●",
         "󰍛 ctx 42% 120k/500k",
     ]);
@@ -315,7 +315,7 @@ test("location line omits duplicate cwd", () => {
         branch: null,
         dirty: false,
     }).map((s) => s.plain);
-    assert.deepEqual(plains, [" jolo", "󰍛 ctx 42% 120k/500k"]);
+    assert.deepEqual(plains, [" taumr", "󰍛 ctx 42% 120k/500k"]);
 });
 
 test("narrow location keeps ctx and cache before place", () => {
@@ -335,7 +335,7 @@ test("narrow location keeps ctx and cache before place", () => {
     );
     assert.equal(line, `${ctx.plain} · ${cache.plain}`);
     assert.ok(!line.includes(".pi"));
-    assert.ok(!line.includes("jolo"));
+    assert.ok(!line.includes("taumr"));
     assert.ok(!line.includes("master"));
 });
 

@@ -1,7 +1,0 @@
-taumr  (URL copied to clipboard on launch)
-
-  just run        - run the project
-  just dev        - run with auto-reload
-  just test       - run tests
-  just test-watch - run tests on file change
-  just add X      - add dependency
