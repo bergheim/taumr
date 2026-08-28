@@ -1,5 +1,7 @@
 # taumr
 
+<p align="center"><img src="assets/logo.svg" width="520" alt="Taumr Eightfold Rein logo"></p>
+
 Old Norse *taumr*: the rein. A shared harness and workflow for agentic coding.
 
 This repo is a kit. Clone it somewhere like `~/dev/taumr`. Do not make it `~/.pi` or `~/.herdr`.

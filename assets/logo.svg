@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="320" viewBox="0 0 640 320" role="img" aria-labelledby="title desc">
+  <title id="title">Taumr logo concept: Eightfold Rein</title>
+  <desc id="desc">Eight agent lanes consolidate through one ring into a single lead.</desc>
+  <rect width="640" height="320" rx="24" fill="#111827"/>
+  <g fill="none" stroke-linecap="round" stroke-width="7">
+    <path d="M72 62 C190 62 210 140 286 151" stroke="#f8fafc"/>
+    <path d="M72 90 C190 90 210 144 286 153" stroke="#94a3b8"/>
+    <path d="M72 118 C190 118 210 148 286 156" stroke="#f8fafc"/>
+    <path d="M72 146 C190 146 220 153 286 158" stroke="#94a3b8"/>
+    <path d="M72 174 C190 174 220 167 286 162" stroke="#f8fafc"/>
+    <path d="M72 202 C190 202 210 172 286 164" stroke="#94a3b8"/>
+    <path d="M72 230 C190 230 210 176 286 167" stroke="#f8fafc"/>
+    <path d="M72 258 C190 258 210 180 286 169" stroke="#94a3b8"/>
+    <circle cx="320" cy="160" r="31" stroke="#f59e0b" stroke-width="11"/>
+    <path d="M351 160 H568" stroke="#f59e0b" stroke-width="11"/>
+  </g>
+  <text x="468" y="224" fill="#f8fafc" font-family="ui-monospace, monospace" font-size="27" font-weight="700" text-anchor="middle" letter-spacing="8">TAUMR</text>
+</svg>
