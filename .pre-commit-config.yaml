@@ -1,0 +1,26 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+        - id: trailing-whitespace
+        - id: end-of-file-fixer
+        - id: check-added-large-files
+  - repo: local
+    hooks:
+        - id: gitleaks
+          name: gitleaks
+          entry: gitleaks protect --verbose --redact --staged
+          language: system
+          pass_filenames: false
+        - id: test
+          name: tests (commit)
+          entry: scripts/test-gate commit
+          language: script
+          pass_filenames: false
+          stages: [pre-commit]
+        - id: test-push
+          name: tests (push)
+          entry: scripts/test-gate push
+          language: script
+          pass_filenames: false
+          stages: [pre-push]

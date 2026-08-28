@@ -1,0 +1,20 @@
+#!/bin/sh
+
+stage="$1"
+if [ -z "$stage" ]; then
+    echo "usage: test-gate <commit|push>" >&2
+    exit 1
+fi
+
+value=$(git config --local --get "hooks.test-on-$stage" 2>/dev/null || true)
+if [ "$value" != "true" ]; then
+    exit 0
+fi
+
+echo "[test-gate] running tests (test-on-$stage)..."
+# Pre-commit exports repository-local Git variables. Tests create temporary
+# repositories, so leaking those variables can mutate this repository instead.
+for name in $(git rev-parse --local-env-vars); do
+    unset "$name"
+done
+just test

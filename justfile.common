@@ -1,0 +1,111 @@
+export APP_PROFILE := env_var_or_default("APP_PROFILE", "1")
+
+# Show all recipes (alias for `just --list`)
+help:
+    @just --list
+
+# Restart the dev server in tmux pane dev:dev (atomic kill + re-run, leaves a usable shell)
+dev-restart:
+    #!/bin/sh
+    set -eu
+    CWD=$(tmux display-message -p -t dev:dev -F '#{pane_current_path}')
+    tmux respawn-pane -k -t dev:dev -c "$CWD" "just dev; exec zsh"
+
+# Open in browser
+browse:
+    #!/bin/sh
+    u="$JOLO_SITE_URL"
+    if [ -n "$WAYLAND_DISPLAY" ]; then
+        chromium --ozone-platform=wayland "$u" >/dev/null 2>&1 &
+        echo "Opened browser: $u"
+    else
+        printf '\e]52;c;%s\a' "$(printf '%s' "$u" | base64)" > /dev/tty
+        echo "Copied to clipboard: $u"
+    fi
+
+# Run accessibility audit (WCAG 2.2 AA)
+a11y *args:
+    pa11y http://localhost:${PORT} {{args}}
+
+# Start PostgreSQL (init on first run)
+db *args="start":
+    db {{args}}
+
+# Copy a file/dir (defaults to the dir you run this from) to stash; prints/clipboards the tailnet URL
+share TARGET=".":
+    @cd "{{invocation_directory()}}" && share {{TARGET}}
+
+# worktree manager (in-container): wt new, wt sync, wt land --rm, wt rm
+wt *args:
+    @wt {{args}}
+
+# Submit perf-rig.toml to the host-side perf hub
+perf:
+    #!/bin/sh
+    set -eu
+    : "${PERF_TESTBED:=dev-container-taumr}"
+    [ -f perf-rig.toml ] || { echo "perf-rig.toml not found at repo root" >&2; exit 1; }
+    [ -n "${PERF_HOST:-}" ] || { echo "PERF_HOST not set (export it in your host shell, e.g. http://<your-host>:8888)" >&2; exit 1; }
+    [ -n "${PORT:-}" ] || { echo "PORT not set (jolo devcontainers export it; running outside one?)" >&2; exit 1; }
+    git rev-parse --verify HEAD >/dev/null 2>&1 || { echo "just perf needs at least one git commit" >&2; exit 1; }
+    # DEV_HOST is set by jolo at container start (tailnet-detect → localhost
+    # fallback). If it's unset OR resolves to a loopback, derive from
+    # PERF_HOST's hostname (hub and devcontainer usually live on the same
+    # machine). The hub's k6 worker cannot reach loopback addresses.
+    case "${DEV_HOST:-}" in
+      ""|localhost|127.*|0.0.0.0|"::1"|"[::1]")
+        DEV_HOST=$(printf '%s' "$PERF_HOST" | sed -E 's|^https?://([^:/]+).*|\1|') ;;
+    esac
+    case "$DEV_HOST" in
+      localhost|127.*|0.0.0.0|"::1"|"[::1]"|"")
+        echo "DEV_HOST resolves to '$DEV_HOST'; hub cannot reach a loopback address. Set PERF_HOST to an externally-reachable hub URL, or set DEV_HOST explicitly." >&2
+        exit 1 ;;
+    esac
+    SHA=$(git rev-parse HEAD)
+    BRANCH=$(git branch --show-current)
+    DIRTY=$(git diff-index --quiet HEAD -- && echo false || echo true)
+    RIG=$(DEV_HOST="$DEV_HOST" envsubst '$DEV_HOST $PORT' < perf-rig.toml)
+    PAYLOAD=$(printf '%s' "$RIG" | jq -R -s \
+      --arg sha "$SHA" \
+      --arg branch "$BRANCH" \
+      --argjson dirty "$DIRTY" \
+      --arg testbed "$PERF_TESTBED" \
+      '{rig:., sha:$sha, branch:$branch, dirty:$dirty, testbed:$testbed}')
+    # POST /api/run blocks until the k6 run completes; the response is
+    # terminal so no polling is needed. Capture body separately to
+    # preserve error output when curl fails under `set -e`.
+    if ! RESP=$(curl --fail-with-body -sS -X POST "$PERF_HOST/api/run" \
+          -H 'content-type: application/json' -d "$PAYLOAD"); then
+        printf '%s\n' "$RESP" >&2
+        exit 1
+    fi
+    # PERF_RAW=1: script/hook mode, dump JSON as-is and let the caller parse.
+    if [ "${PERF_RAW:-0}" = "1" ]; then
+        printf '%s\n' "$RESP"
+        exit 0
+    fi
+    # Validate response is JSON before parsing; jq's own exit codes
+    # (4/5 on malformed input) would otherwise escape via `set -e`
+    # without hitting the infra-failure exit(1) we promise below.
+    if ! printf '%s' "$RESP" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo "hub returned non-JSON response:" >&2
+        printf '%s\n' "$RESP" >&2
+        exit 1
+    fi
+    VALIDITY=$(printf '%s' "$RESP" | jq -r '.validity_status // "unknown"')
+    RUN_ID=$(printf '%s' "$RESP" | jq -r '.run_id // "unknown"')
+    GRAFANA=$(printf '%s' "$RESP" | jq -r '.grafana_url // empty')
+    PYROSCOPE=$(printf '%s' "$RESP" | jq -r '.pyroscope_url // empty')
+    K6_EXIT=$(printf '%s' "$RESP" | jq -r '.k6_exit // "?"')
+    FAIL=$(printf '%s' "$RESP" | jq -r '.failure_reason // empty')
+    BENCHER=$(printf '%s' "$RESP" | jq -r '.bencher_report_url // empty')
+    echo "run_id:         $RUN_ID"
+    echo "validity:       $VALIDITY"
+    [ -n "$FAIL" ] && echo "failure_reason: $FAIL"
+    echo "k6_exit:        $K6_EXIT"
+    [ -n "$GRAFANA" ] && echo "grafana_url:    $GRAFANA"
+    [ -n "$PYROSCOPE" ] && echo "pyroscope_url:  $PYROSCOPE"
+    [ -n "$BENCHER" ] && echo "bencher:        $BENCHER"
+    # Exit 2 when the run completed but didn't pass validity — distinct
+    # from exit 1 (hub/network/parse failure) so CI can tell them apart.
+    [ "$VALIDITY" = "pass" ] || exit 2
