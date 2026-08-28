@@ -1,0 +1,541 @@
+import type {
+    ExtensionAPI,
+    ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
+import { basename, dirname, resolve } from "node:path";
+import { fetchAll, type ProviderStatus } from "./core.ts";
+import {
+    renderBar,
+    barColor,
+    cells,
+    clip,
+    formatDuration,
+    formatResetWhen,
+    renderCurrentLine,
+    renderLocationLine,
+    TONE,
+    cacheRemainingSeconds,
+    promptCacheTtlSeconds,
+    type CurrentSession,
+    type Theme,
+} from "./render.ts";
+
+const QUOTA_POLL_MS = 60_000;
+const QUOTA_RETRY_MS = 15_000;
+
+function transientQuotaFailure(status: ProviderStatus): boolean {
+    return (
+        "stale" in status &&
+        (/^timeout\b/.test(status.stale) ||
+            /^http 5\d\d$/.test(status.stale) ||
+            status.stale === "unreachable" ||
+            status.stale === "fetch failed")
+    );
+}
+
+function recoverableQuotaFailure(status: ProviderStatus): boolean {
+    return (
+        transientQuotaFailure(status) ||
+        ("stale" in status && status.stale === "http 429")
+    );
+}
+
+export function quotaRefreshDelay(statuses: ProviderStatus[]): number {
+    return statuses.some(transientQuotaFailure)
+        ? QUOTA_RETRY_MS
+        : QUOTA_POLL_MS;
+}
+
+export function mergeQuotaStatuses(
+    previous: ProviderStatus[],
+    next: ProviderStatus[],
+    elapsedSeconds = 0,
+): ProviderStatus[] {
+    const agedReset = (seconds: number | null | undefined) =>
+        seconds == null ? seconds : Math.max(0, seconds - elapsedSeconds);
+    return next.map((status) => {
+        if (!recoverableQuotaFailure(status)) return status;
+        const prior = previous.find(
+            (candidate) =>
+                candidate.name === status.name && "usage" in candidate,
+        );
+        if (!prior || !("usage" in prior)) return status;
+        return {
+            ...prior,
+            usage: {
+                ...prior.usage,
+                resetsInSeconds: agedReset(prior.usage.resetsInSeconds) ?? null,
+                weeklyResetsInSeconds: agedReset(
+                    prior.usage.weeklyResetsInSeconds,
+                ),
+            },
+        };
+    });
+}
+
+function line(status: ProviderStatus): string {
+    if ("stale" in status) return `${status.name}: — (${status.stale})`;
+    const { sessionPercent, weeklyPercent, resetsInSeconds } = status.usage;
+    const reset =
+        resetsInSeconds === null
+            ? ""
+            : `  resets ${formatDuration(resetsInSeconds)}`;
+    return (
+        `${status.name}: ${renderBar(sessionPercent)} ${Math.round(sessionPercent)}%` +
+        `  week ${Math.round(weeklyPercent)}%${reset}`
+    );
+}
+
+// Uncolored text only: width budgeting (renderFooterLines) measures this,
+// never the ANSI-wrapped result, so a color escape sequence can never be
+// sliced in half by a width cut.
+function providerIcon(name: string): string {
+    if (name === "grok") return "𝕏";
+    if (name === "antigravity") return "󰊭";
+    return "󰚩";
+}
+
+// Grok SuperGrok is a weekly credit pool, and some Codex plans report no 5h
+// primary — both lead with the weekly number instead of the session one.
+function weeklyOnly(status: ProviderStatus): boolean {
+    return (
+        status.name === "grok" ||
+        ("usage" in status && status.usage.sessionIsFiveHour === false)
+    );
+}
+
+// Direct-account quota only. OpenRouter / gateway / claude-bridge share
+// neither these credentials nor these windows.
+export function quotaProvider(provider: string): string | null {
+    if (provider === "xai") return "grok";
+    if (provider === "anthropic") return "claude";
+    if (provider === "openai-codex") return "codex";
+    if (provider === "agy") return "antigravity";
+    return null;
+}
+
+function windowReset(
+    seconds: number | null,
+    measuredAtMs: number,
+    nowMs: number,
+): string {
+    if (seconds === null) return "";
+    return ` · ${formatResetWhen(seconds, measuredAtMs, nowMs)}`;
+}
+
+function quotaPlain(
+    status: ProviderStatus,
+    measuredAtMs: number,
+    nowMs: number,
+): { quota: string; quotaPercent: number } | null {
+    if ("stale" in status) return null;
+    const {
+        sessionPercent,
+        weeklyPercent,
+        resetsInSeconds,
+        weeklyResetsInSeconds,
+    } = status.usage;
+    if (weeklyOnly(status)) {
+        return {
+            quota: `${Math.round(weeklyPercent)}% wk${windowReset(weeklyResetsInSeconds ?? resetsInSeconds, measuredAtMs, nowMs)}`,
+            quotaPercent: weeklyPercent,
+        };
+    }
+    return {
+        quota:
+            `${Math.round(sessionPercent)}% 5h${windowReset(resetsInSeconds, measuredAtMs, nowMs)}` +
+            ` / ${Math.round(weeklyPercent)}% wk${windowReset(weeklyResetsInSeconds, measuredAtMs, nowMs)}`,
+        quotaPercent: sessionPercent,
+    };
+}
+
+export function quotaSnapshot(
+    statuses: ProviderStatus[],
+    provider: string,
+    measuredAtMs: number,
+    nowMs: number,
+): { quota: string | null; quotaPercent: number | null } {
+    const name = quotaProvider(provider);
+    if (!name) return { quota: null, quotaPercent: null };
+    const status = statuses.find((s) => s.name === name);
+    if (!status) return { quota: null, quotaPercent: null };
+    return (
+        quotaPlain(status, measuredAtMs, nowMs) ?? {
+            quota: null,
+            quotaPercent: null,
+        }
+    );
+}
+
+function plainSegment(status: ProviderStatus): string {
+    const label = `${providerIcon(status.name)} ${status.name}`;
+    if ("stale" in status) return `${label} —`;
+    const { sessionPercent, weeklyPercent } = status.usage;
+    if (weeklyOnly(status)) return `${label} ${Math.round(weeklyPercent)}% wk`;
+    return `${label} ${Math.round(sessionPercent)}% 5h / ${Math.round(weeklyPercent)}% wk`;
+}
+
+function footerLine(theme: Theme, status: ProviderStatus): string {
+    const segment = plainSegment(status);
+    if ("stale" in status) return theme.fg("dim", segment);
+    const percent = weeklyOnly(status)
+        ? status.usage.weeklyPercent
+        : status.usage.sessionPercent;
+    const color = barColor(percent);
+    return color ? theme.fg(TONE[color], segment) : segment;
+}
+
+function sessionCost(ctx: ExtensionContext | undefined): number {
+    let cost = 0;
+    for (const entry of ctx?.sessionManager.getBranch() ?? []) {
+        if (entry.type !== "message" || entry.message.role !== "assistant")
+            continue;
+        const total = (
+            entry.message as { usage?: { cost?: { total?: number } } }
+        ).usage?.cost?.total;
+        if (typeof total === "number" && Number.isFinite(total)) cost += total;
+    }
+    return cost;
+}
+
+export function lastUserSentAtMs(
+    ctx: ExtensionContext | undefined,
+): number | null {
+    const branch = ctx?.sessionManager.getBranch() ?? [];
+    for (let i = branch.length - 1; i >= 0; i--) {
+        const entry = branch[i];
+        if (entry.type === "model_change" || entry.type === "compaction")
+            return null;
+        if (entry.type !== "message" || entry.message.role !== "user") continue;
+        const ts = entry.message.timestamp;
+        return typeof ts === "number" && Number.isFinite(ts) ? ts : null;
+    }
+    return null;
+}
+
+export function recentEditedPaths(ctx: ExtensionContext): string[] {
+    const paths: string[] = [];
+    const entries = ctx.sessionManager.getBranch();
+    for (let i = entries.length - 1; i >= 0 && paths.length < 10; i--) {
+        const entry = entries[i];
+        if (entry.type !== "message" || entry.message.role !== "assistant")
+            continue;
+        const content = entry.message.content;
+        for (let j = content.length - 1; j >= 0 && paths.length < 10; j--) {
+            const item = content[j] as {
+                type?: string;
+                name?: string;
+                arguments?: { path?: unknown };
+            };
+            if (
+                item.type === "toolCall" &&
+                (item.name === "edit" || item.name === "write") &&
+                typeof item.arguments?.path === "string" &&
+                !paths.includes(item.arguments.path)
+            )
+                paths.push(item.arguments.path);
+        }
+    }
+    return paths;
+}
+
+export function extraCwd(
+    cwd: string | undefined,
+    gitRoot: string | null,
+): string {
+    if (!cwd || !gitRoot) return "";
+    const a = resolve(cwd);
+    const b = resolve(gitRoot);
+    if (a === b || a.startsWith(`${b}/`)) return "";
+    return basename(a);
+}
+
+function snapshotCurrent(
+    ctx: ExtensionContext | undefined,
+    branch: string | null,
+    worktree: string,
+    dirty: boolean,
+): CurrentSession {
+    const model = ctx?.model;
+    const usage = ctx?.getContextUsage();
+    const thinking =
+        model?.reasoning && ctx?.thinkingLevel && ctx.thinkingLevel !== "off"
+            ? ctx.thinkingLevel
+            : null;
+    const cacheTtlSeconds = promptCacheTtlSeconds(
+        model?.provider ?? "",
+        model?.id ?? "",
+    );
+    return {
+        provider: model?.provider ?? "?",
+        modelId: model?.id ?? "no-model",
+        thinking,
+        dir: worktree,
+        branch,
+        dirty,
+        percent: usage?.percent ?? null,
+        tokens: usage?.tokens ?? null,
+        contextWindow: usage?.contextWindow ?? model?.contextWindow ?? null,
+        cost: sessionCost(ctx),
+        cacheRemainingSeconds: cacheRemainingSeconds(
+            lastUserSentAtMs(ctx),
+            cacheTtlSeconds,
+            Date.now(),
+        ),
+        cacheTtlSeconds,
+        quota: null,
+        quotaPercent: null,
+    };
+}
+
+// pi's Component.render(width) contract requires every returned line to fit
+// the viewport; a narrow terminal can't always show all providers. We drop
+// whole columns rather than wrap (footer must stay one line) or truncate
+// inside a colored segment (would cut an ANSI escape in half and corrupt the
+// terminal). Included/omitted is decided on the plain, uncolored text, then
+// theme.fg is applied only to segments already known to fit.
+export function renderFooterLines(
+    theme: Theme,
+    statuses: ProviderStatus[],
+    width: number,
+): string[] {
+    const safeWidth = Math.max(0, width);
+
+    const title = "󰐱 limits";
+    if (statuses.length === 0) {
+        return [theme.fg("dim", clip(`${title} · loading…`, safeWidth))];
+    }
+
+    if (safeWidth <= cells(title))
+        return [theme.fg("accent", theme.bold(clip(title, safeWidth)))];
+
+    const sep = " · ";
+    const included: ProviderStatus[] = [];
+    let used = cells(title);
+    for (const status of statuses) {
+        const seg = plainSegment(status);
+        const next = used + sep.length + cells(seg);
+        if (next > safeWidth) break;
+        included.push(status);
+        used = next;
+    }
+
+    const parts = [
+        theme.fg("accent", theme.bold(title)),
+        ...included.map((s) => footerLine(theme, s)),
+    ];
+    const omitted = statuses.length - included.length;
+    if (omitted > 0) {
+        const marker = `+${omitted}`;
+        if (used + sep.length + marker.length <= safeWidth) {
+            parts.push(theme.fg("dim", marker));
+        }
+    }
+    return [parts.join(sep)];
+}
+
+export default function (pi: ExtensionAPI) {
+    pi.registerCommand("usage", {
+        description:
+            "Show provider quota for Grok, Claude, Codex, and Antigravity",
+        handler: async (_args, ctx) => {
+            const statuses = await fetchAll();
+            ctx.ui.notify(statuses.map(line).join("\n"), "info");
+        },
+    });
+
+    // fetchAll degrades every failure to a stale marker, so the footer never
+    // has to distinguish "not fetched yet" from "provider unreachable" beyond
+    // this initial empty-array loading state.
+    let statuses: ProviderStatus[] = [];
+    let measuredAtMs = Date.now();
+    let requestRender: (() => void) | undefined;
+    let quotaTimer: ReturnType<typeof setTimeout> | undefined;
+    let refreshPromise: Promise<ProviderStatus[]> | undefined;
+    let refreshGeneration = 0;
+    let ctxRef: ExtensionContext | undefined;
+    let worktree = "";
+    let gitBranch: string | null = null;
+    let gitRoot: string | null = null;
+    let gitDirty = false;
+
+    async function updateRepo(directory: string): Promise<boolean> {
+        const result = await pi.exec(
+            "git",
+            [
+                "-C",
+                directory,
+                "rev-parse",
+                "--show-toplevel",
+                "--abbrev-ref",
+                "HEAD",
+            ],
+            { timeout: 2000 },
+        );
+        if (result.code !== 0) return false;
+        const [root, branch] = result.stdout.trim().split("\n");
+        if (!root || !branch) return false;
+        gitRoot = root;
+        gitBranch = branch;
+        worktree = basename(root);
+        const status = await pi.exec(
+            "git",
+            ["-C", root, "status", "--porcelain"],
+            {
+                timeout: 2000,
+            },
+        );
+        gitDirty = status.code === 0 && status.stdout.trim().length > 0;
+        requestRender?.();
+        return true;
+    }
+
+    async function refresh(): Promise<ProviderStatus[]> {
+        if (refreshPromise) return refreshPromise;
+        const startedAtMs = Date.now();
+        const elapsedSeconds = Math.max(
+            0,
+            Math.floor((startedAtMs - measuredAtMs) / 1000),
+        );
+        measuredAtMs = startedAtMs;
+        refreshPromise = fetchAll(measuredAtMs)
+            .then((next) => {
+                statuses = mergeQuotaStatuses(statuses, next, elapsedSeconds);
+                requestRender?.();
+                return next;
+            })
+            .finally(() => {
+                refreshPromise = undefined;
+            });
+        return refreshPromise;
+    }
+
+    function stopQuotaRefresh(): void {
+        refreshGeneration++;
+        if (quotaTimer !== undefined) clearTimeout(quotaTimer);
+        quotaTimer = undefined;
+    }
+
+    async function refreshAndSchedule(): Promise<void> {
+        const generation = ++refreshGeneration;
+        if (quotaTimer !== undefined) clearTimeout(quotaTimer);
+        quotaTimer = undefined;
+        const next = await refresh();
+        if (generation !== refreshGeneration) return;
+        quotaTimer = setTimeout(
+            () => void refreshAndSchedule().catch(() => {}),
+            quotaRefreshDelay(next),
+        );
+    }
+
+    function paintFooter(ctx: ExtensionContext): void {
+        ctxRef = ctx;
+        ctx.ui.setFooter((tui, theme, footerData) => {
+            requestRender = () => tui.requestRender();
+            const unsub = footerData.onBranchChange(() => tui.requestRender());
+            let tick: ReturnType<typeof setInterval> | undefined;
+            const stopTick = () => {
+                if (tick !== undefined) {
+                    clearInterval(tick);
+                    tick = undefined;
+                }
+            };
+            return {
+                dispose() {
+                    stopTick();
+                    unsub();
+                },
+                invalidate() {},
+                render(width: number): string[] {
+                    const current = {
+                        ...snapshotCurrent(
+                            ctxRef,
+                            gitBranch ?? footerData.getGitBranch(),
+                            worktree,
+                            gitDirty,
+                        ),
+                        cwd: extraCwd(ctxRef?.cwd, gitRoot) || null,
+                        ...quotaSnapshot(
+                            statuses,
+                            ctxRef?.model?.provider ?? "?",
+                            measuredAtMs,
+                            Date.now(),
+                        ),
+                    };
+                    if (current.cacheRemainingSeconds === null) {
+                        stopTick();
+                    } else if (tick === undefined)
+                        tick = setInterval(() => tui.requestRender(), 1000);
+                    return [
+                        renderLocationLine(theme, current, width),
+                        renderCurrentLine(theme, current, width),
+                        ...renderFooterLines(theme, statuses, width),
+                    ];
+                },
+            };
+        });
+    }
+
+    pi.on("session_start", async (_event, ctx) => {
+        worktree = basename(ctx.cwd);
+        gitBranch = null;
+        gitRoot = null;
+        gitDirty = false;
+        paintFooter(ctx);
+        if (!(await updateRepo(ctx.cwd))) {
+            for (const path of recentEditedPaths(ctx)) {
+                if (await updateRepo(dirname(resolve(ctx.cwd, path)))) break;
+            }
+        }
+        await refreshAndSchedule();
+    });
+
+    pi.on("session_shutdown", () => {
+        stopQuotaRefresh();
+    });
+
+    pi.on("model_select", (_event, ctx) => {
+        ctxRef = ctx;
+        requestRender?.();
+    });
+    pi.on("thinking_level_select", (_event, ctx) => {
+        ctxRef = ctx;
+        requestRender?.();
+    });
+    pi.on("turn_end", (_event, ctx) => {
+        ctxRef = ctx;
+        requestRender?.();
+    });
+    pi.on("tool_result", async (event, ctx) => {
+        if (event.isError) return;
+        const path = (event.input as { path?: unknown }).path;
+        if (
+            (event.toolName === "edit" || event.toolName === "write") &&
+            typeof path === "string"
+        ) {
+            await updateRepo(dirname(resolve(ctx.cwd, path)));
+            return;
+        }
+        const command = (event.input as { command?: unknown }).command;
+        if (
+            event.toolName === "bash" &&
+            gitRoot &&
+            typeof command === "string" &&
+            /(?:^|[;&|\s])git(?:\s|$)/.test(command)
+        )
+            await updateRepo(gitRoot);
+    });
+
+    // Quota moves as turns run; re-fetch before each one. fetchAll's own
+    // cache (core.ts, 60s TTL) keeps this from hammering provider APIs.
+    // Paint immediately so the cache clock starts at user send, not when
+    // refresh() lands. turn_start sits inline in pi's sequential turn
+    // pipeline, so refresh must not await. fetchAll degrades every failure
+    // internally; the catch is cheap insurance against an unhandled
+    // rejection wedging the process if that guarantee is ever broken.
+    pi.on("turn_start", (_event, ctx) => {
+        ctxRef = ctx;
+        requestRender?.();
+        refreshAndSchedule().catch(() => {});
+    });
+}

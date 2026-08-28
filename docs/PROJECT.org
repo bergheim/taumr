@@ -1,0 +1,17 @@
+#+title: taumr project
+
+* Purpose
+Make agentic harnesses and workflows as effective as possible.
+
+* Audience
+Developers and operators building and using agentic workflows.
+
+* Constraints
+- Vendor portable copies into this repository; do not modify live =~/.pi=.
+- Keep secrets, sessions, credentials, and machine-local state out of Git.
+- Prefer exact copies before cleanup or generalization.
+
+* Decisions
+- Mirror Pi material under =.pi/=.
+- Name shared extensions =pi-taumr-<name>=.
+- Start with =pi-taumr-statusbar=, copied from =~/.pi/agent/extensions/usage= with behavior preserved.

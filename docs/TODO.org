@@ -108,3 +108,15 @@ Open (answer in the TODO log during impl):
 Success: =/watch …= from a Herdr Pi opens a frontier sibling that can steer the source via session write, ping you, and rewind or clear+restart a circling run — without touching the source pane’s life cycle and without forking a new worktree.
 
 Land in this kit as a Pi extension (source =/watch=) plus a tiny Herdr sibling recipe. Document next to the fork path in =docs/workflow.md=.
+
+* DONE Vendor pi-taumr-statusbar                               :pi:statusbar:
+CLOSED: [2026-08-28 Fri 12:54]
+:PROPERTIES:
+:ID:       20260828T125429Z-380298
+:CREATED:  [2026-08-28 Fri 12:54]
+:LAST_AGENT: unknown
+:END:
+:LOGBOOK:
+- Session unknown [2026-08-28 Fri 12:54]
+:END:
+Copy ~/.pi/agent/extensions/usage into .pi/agent/extensions/pi-taumr-statusbar with behavior preserved.
