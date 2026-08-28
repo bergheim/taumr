@@ -44,3 +44,67 @@ Failure safety: source pane is /sacred/ on every path, including errors after cr
 Non-goals: uncommitted files in the clone; devcontainer / =just wt= / worktrunk / =@yassimba/pi-herdr-worktree=; Pi =/fork= rewind; reuse of an existing worktree; auto-close source; merge-back; flags that split branch name from compact prompt; editing =herdr-agent-state.ts=.
 
 Success: one command, visible grouped workspace, usable inherited conversation, source invariant holds. Smoke on a disposable host git repo first. Then copy into this kit and add the fork path to =docs/workflow.md=.
+
+* TODO /watch sibling: steer, ntfy, abort loops  :herdr:pi:watch:steer:
+:PROPERTIES:
+:ID:       20260828T113951Z-378ec6
+:CREATED:  [2026-08-28 Fri 13:39]
+:END:
+Sibling Herdr pane. Not a worktree fork. Same cwd as the source. Fresh Pi: your brief plus tails of source JSONL and git diff. It does /not/ =pi --fork= the looping session.
+
+Command (on the source): =/watch [brief]=
+Example: =/watch stop if it touches ~/.pi=
+
+Opt-in per run. No watcher unless you type it.
+
+*Sees* (all of these):
+- Source session JSONL (messages, tool calls, compaction).
+- Git worktree diff (=~git diff --stat= / no net progress).
+- Source pane PTY via =herdr agent read= (trust prompts, spinner stalls).
+- The watch brief.
+
+*Does* without asking:
+- *Inject* a steering line into the source session via JSONL append / RPC. /Not/ =herdr agent prompt= typing (compact-via-prompt risk; also looks like you only if the TUI sent it). Spike the actual Pi write path; refuse to ship on a fake API.
+- *ntfy* when it thinks you should look (after inject, before abort).
+- *Abort:* watcher picks depth. Tight loop → rewind last turn. Bad streak → rewind K turns. Run is junk → =/clear=, inject a different prompt, start it again.
+
+Ladder on a detected circle: *inject → ntfy → abort*. First hit steers. Ping so you can grab the wheel. If it keeps circling, rewind/clear.
+
+*Circle signals* (all live; knobs later):
+- Same tool+args N times (JSONL).
+- File churn / no net git progress in T minutes.
+- Brief violation (immediate fire, not necessarily a loop).
+- Frontier judgment on the tail (slow drift). Watcher model is a *frontier critic always*, not the local worker.
+
+Operator sees:
+- Source pane keeps running. =/watch= opens a sibling agent in the same Herdr workspace, same worktree.
+- Watcher pane shows brief + tails, then inject/ntfy/abort actions as they happen.
+- Source JSONL gains steering messages that did not come from the keyboard.
+- On abort: last turn (or K) gone, or a cleared session with a new prompt already starting.
+
+Flow:
+1. Source is a Herdr Pi, idle enough to accept =/watch=. Refuse outside Herdr. Same host-visible git cwd. Watcher is /not/ a =herdr worktree create=.
+2. Capture source session path, pane/agent id, cwd, =HEAD=. Open sibling: =herdr agent start= (or split) in this workspace, =--kind pi=, cwd unchanged. Seed watcher with brief + last ~20 JSONL events + =git diff --stat=.
+3. Watcher loop (heuristic, not every token): read JSONL, diff, =herdr agent read=. Match N-times / churn / brief / judgment.
+4. On hit: append steering message onto *source* session via RPC/JSONL. Then ntfy. Keep watching.
+5. If still circling: pick rewind 1, rewind K, or =/clear= + new prompt + start. Then ntfy what it did.
+6. Source pane stays up. Watcher does not close it. Watcher may stop itself when source goes idle and stays clean.
+
+Invariants:
+- Watcher session ≠ source session. No shared leaf, no =pi --fork=.
+- Same worktree, shared =.git=. Watcher reads; it does not commit, stash, or =git reset= to “help”.
+- Inject is a real session event, not a PTY keystroke.
+- Abort never deletes the worktree or the source pane.
+- =/watch= without a brief is allowed but weaker (heuristics only).
+
+Non-goals: always-on watcher for every agent; same-session extension that shares fate with the runaway; =herdr agent prompt= as the inject path; host sidecar with no pane; Emacs overlay; watching live =~/.pi= as a default target; merging with =/herdr-fork= (fork isolates work; watch criticises it).
+
+Open (answer in the TODO log during impl):
+- Exact Pi RPC / JSONL-append / rewind / =/clear= primitives on the installed Pi version. If missing, that spike /is/ the first cut — do not fake it with TUI typing.
+- Defaults for N and T.
+- ntfy topic (reuse Pi completion topic or a =watch= topic).
+- How the watcher authenticates a write into another session’s JSONL without racing the live TUI.
+
+Success: =/watch …= from a Herdr Pi opens a frontier sibling that can steer the source via session write, ping you, and rewind or clear+restart a circling run — without touching the source pane’s life cycle and without forking a new worktree.
+
+Land in this kit as a Pi extension (source =/watch=) plus a tiny Herdr sibling recipe. Document next to the fork path in =docs/workflow.md=.
