@@ -1,0 +1,20 @@
+# credentials
+**/.env
+**/.env.*
+**/auth.json
+**/models-store.json
+**/trust.json
+**/MEMORY.md
+
+# runtime
+**/sessions/
+**/*.log
+**/*.sock
+**/*.socket
+**/.plugins.lock
+**/session.json
+**/worktrees/
+**/tmp/
+**/.pnpm-store/
+**/node_modules/
+**/target/
