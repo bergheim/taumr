@@ -2,6 +2,14 @@
 #+TODO: TODO INPROGRESS WAITING BLOCKED | DONE CANCELLED
 #+STARTUP: overview
 
+* TL;DR
+
+- */herdr-fork* — Open an isolated Herdr worktree whose Pi inherits the current conversation without changing the original session. The prototype has 22 unit tests. Next: smoke-test it in a disposable host repository, copy it here, and document it.
+
+- */watch* — Open a sibling Pi that watches the current agent for loops or unsafe behavior, then steers it, notifies the operator, and rewinds or restarts it if necessary. Next: verify Pi has safe APIs for controlling another live session; do not fake this with terminal keystrokes.
+
+- *Priority* — Ship the fork first. Fork creates an isolated worktree; watch stays in the current worktree and supervises the running session.
+
 * TODO Fork Pi context into a Herdr worktree  :herdr:pi:fork:worktree:
 :PROPERTIES:
 :ID:       20260828T112027Z-7986ce
